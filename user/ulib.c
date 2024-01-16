@@ -3,6 +3,7 @@
 #include "kernel/fcntl.h"
 #include "user/user.h"
 
+// 字符串拼接
 char*
 strcpy(char *s, const char *t)
 {
@@ -43,6 +44,7 @@ memset(void *dst, int c, uint n)
   return dst;
 }
 
+// 找到第一个等于c的位置
 char*
 strchr(const char *s, char c)
 {
@@ -95,8 +97,9 @@ atoi(const char *s)
   return n;
 }
 
+// 把第二个参数复制到第一个参数，赋值n个
 void*
-memmove(void *vdst, const void *vsrc, int n)
+memmove(void *vdst, const void *vsrc, int n) 
 {
   char *dst;
   const char *src;

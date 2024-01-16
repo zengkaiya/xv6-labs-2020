@@ -21,7 +21,7 @@ int chdir(const char*);
 int dup(int);
 int getpid(void);
 char* sbrk(int);
-int sleep(int);
+int sleep(int); 
 int uptime(void);
 
 // ulib.c

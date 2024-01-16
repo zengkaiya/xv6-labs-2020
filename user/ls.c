@@ -3,10 +3,11 @@
 #include "user/user.h"
 #include "kernel/fs.h"
 
+// 返回最后的文件名
 char*
 fmtname(char *path)
 {
-  static char buf[DIRSIZ+1];
+  static char buf[DIRSIZ+1];  // DIRSIZ就是一个目录名的长度
   char *p;
 
   // Find first character after last slash.
@@ -26,9 +27,9 @@ void
 ls(char *path)
 {
   char buf[512], *p;
-  int fd;
-  struct dirent de;
-  struct stat st;
+  int fd;  // 文件描述符
+  struct dirent de;  // 目录项
+  struct stat st;  // 文件状态
 
   if((fd = open(path, 0)) < 0){
     fprintf(2, "ls: cannot open %s\n", path);
@@ -47,17 +48,17 @@ ls(char *path)
     break;
 
   case T_DIR:
-    if(strlen(path) + 1 + DIRSIZ + 1 > sizeof buf){
+    if(strlen(path) + 1 + DIRSIZ + 1 > sizeof buf){ // 因为目录名可以一直叠加，所以可能会超过buf长度
       printf("ls: path too long\n");
       break;
     }
-    strcpy(buf, path);
-    p = buf+strlen(buf);
-    *p++ = '/';
-    while(read(fd, &de, sizeof(de)) == sizeof(de)){
+    strcpy(buf, path);  // 拼接到buf后面
+    p = buf+strlen(buf);  // 指针右移
+    *p++ = '/'; // 加一个'/'
+    while(read(fd, &de, sizeof(de)) == sizeof(de)){  // 如果是目录的话，读进dirent这个结构体里面，不停读入
       if(de.inum == 0)
         continue;
-      memmove(p, de.name, DIRSIZ);
+      memmove(p, de.name, DIRSIZ);  // 加到p后面
       p[DIRSIZ] = 0;
       if(stat(buf, &st) < 0){
         printf("ls: cannot stat %s\n", buf);
