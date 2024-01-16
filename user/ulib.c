@@ -98,6 +98,7 @@ atoi(const char *s)
 void*
 memmove(void *vdst, const void *vsrc, int n)
 {
+  // 两个移动指针
   char *dst;
   const char *src;
 
@@ -106,7 +107,7 @@ memmove(void *vdst, const void *vsrc, int n)
   if (src > dst) {
     while(n-- > 0)
       *dst++ = *src++;
-  } else {
+  } else {  // 妙呀，防止vsrc被dst修改了，从最后开始往前复制
     dst += n;
     src += n;
     while(n-- > 0)

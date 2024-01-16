@@ -1,0 +1,6 @@
+{
+    "files.associations": {
+        "*.html": "html",
+        "user.h": "c"
+    }
+}

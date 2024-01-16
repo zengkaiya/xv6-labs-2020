@@ -9,12 +9,12 @@ main(int argc, char *argv[])
   int i;
   char *nargv[MAXARG];
 
-  if(argc < 3 || (argv[1][0] < '0' || argv[1][0] > '9')){
+  if(argc < 3 || (argv[1][0] < '0' || argv[1][0] > '9')){  // 参数不满足要求
     fprintf(2, "Usage: %s mask command\n", argv[0]);
     exit(1);
   }
 
-  if (trace(atoi(argv[1])) < 0) {
+  if (trace(atoi(argv[1])) < 0) {  // 这个trace系统调用应该就是我们要实现的
     fprintf(2, "%s: trace failed\n", argv[0]);
     exit(1);
   }

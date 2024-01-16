@@ -23,10 +23,11 @@ int getpid(void);
 char* sbrk(int);
 int sleep(int);
 int uptime(void);
+int trace(int);
 
 // ulib.c
 int stat(const char*, struct stat*);
-char* strcpy(char*, const char*);
+char* strcpy(char*, const char*);  // 字符串的复制，比较low
 void *memmove(void*, const void*, int);
 char* strchr(const char*, char c);
 int strcmp(const char*, const char*);
@@ -39,4 +40,4 @@ void* malloc(uint);
 void free(void*);
 int atoi(const char*);
 int memcmp(const void *, const void *, uint);
-void *memcpy(void *, const void *, uint);
+void *memcpy(void *, const void *, uint);  // 有大小的字符串赋值
