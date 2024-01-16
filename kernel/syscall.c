@@ -105,6 +105,7 @@ extern uint64 sys_wait(void);
 extern uint64 sys_write(void);
 extern uint64 sys_uptime(void);
 extern uint64 sys_trace(void);
+extern uint64 sys_sysinfo(void);
 
 // 这是一个数组，其中存储的元素是函数指针，每个函数指针指向一个返回类型为 uint64，不带参数的函数
 static uint64 (*syscalls[])(void) = {
@@ -130,6 +131,7 @@ static uint64 (*syscalls[])(void) = {
 [SYS_mkdir]   sys_mkdir,
 [SYS_close]   sys_close,
 [SYS_trace]   sys_trace,
+[SYS_sysinfo] sys_sysinfo,
 };
 
 static char *syscall_name[] = {
@@ -154,7 +156,8 @@ static char *syscall_name[] = {
 [SYS_link]    "link",
 [SYS_mkdir]   "mkdir",
 [SYS_close]   "close",
-[SYS_trace]   "trace"
+[SYS_trace]   "trace",
+[SYS_sysinfo] "sysinfo",
 };
 
 void

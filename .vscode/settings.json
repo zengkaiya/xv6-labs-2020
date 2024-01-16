@@ -1,6 +1,8 @@
 {
     "files.associations": {
         "*.html": "html",
-        "user.h": "c"
+        "user.h": "c",
+        "proc.h": "c",
+        "defs.h": "c"
     }
 }

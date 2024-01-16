@@ -20,8 +20,19 @@ struct run {
 
 struct {
   struct spinlock lock;
-  struct run *freelist;
+  struct run *freelist;  // 空余空间
 } kmem;
+
+uint64 get_mem_bytes()
+{
+  struct run *r;
+  acquire(&kmem.lock);
+  uint64 res = 0;
+  for (r = kmem.freelist; r; r = r->next)
+    res ++;
+  release(&kmem.lock); 
+  return res * 4096;
+}
 
 void
 kinit()
