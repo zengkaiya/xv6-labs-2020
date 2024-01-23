@@ -9,11 +9,11 @@
 /*
  * the kernel's page table.
  */
-pagetable_t kernel_pagetable;
+pagetable_t kernel_pagetable;  // 这是一个地址
 
 extern char etext[];  // kernel.ld sets this to end of kernel code.
 
-extern char trampoline[]; // trampoline.S
+extern char trampoline[]; // trampoline.S，这是位于进程最上方的
 
 /*
  * create a direct-map page table for the kernel.
@@ -52,8 +52,8 @@ kvminit()
 void
 kvminithart()
 {
-  w_satp(MAKE_SATP(kernel_pagetable));
-  sfence_vma();
+  w_satp(MAKE_SATP(kernel_pagetable));  // 记录页表基地址在satp寄存器中
+  sfence_vma();  // 刷新TLB
 }
 
 // Return the address of the PTE in page table pagetable
@@ -69,23 +69,23 @@ kvminithart()
 //   12..20 -- 9 bits of level-0 index.
 //    0..11 -- 12 bits of byte offset within the page.
 pte_t *
-walk(pagetable_t pagetable, uint64 va, int alloc)
+walk(pagetable_t pagetable, uint64 va, int alloc) // pagetable就是一个数组
 {
   if(va >= MAXVA)
     panic("walk");
 
-  for(int level = 2; level > 0; level--) {
-    pte_t *pte = &pagetable[PX(level, va)];
+  for(int level = 2; level > 0; level--) {  // 两级页表，每个循环内走完一个页表
+    pte_t *pte = &pagetable[PX(level, va)];  // 取出pte的地址
     if(*pte & PTE_V) {
-      pagetable = (pagetable_t)PTE2PA(*pte);
+      pagetable = (pagetable_t)PTE2PA(*pte);  // 获取物理地址的前44位
     } else {
       if(!alloc || (pagetable = (pde_t*)kalloc()) == 0)
-        return 0;
-      memset(pagetable, 0, PGSIZE);
+        return 0;  // 不分配，或者无法分配，直接返回0
+      memset(pagetable, 0, PGSIZE);  // 分配成功，把这一页清空
       *pte = PA2PTE(pagetable) | PTE_V;
     }
   }
-  return &pagetable[PX(0, va)];
+  return &pagetable[PX(0, va)];  // 每一页真正的内容一定是存在最后一级的页表中的
 }
 
 // Look up a virtual address, return the physical address,
@@ -132,7 +132,7 @@ kvmpa(uint64 va)
   pte_t *pte;
   uint64 pa;
   
-  pte = walk(kernel_pagetable, va, 0);
+  pte = walk(kernel_pagetable, va, 0);  // 寻找pte都是这个函数
   if(pte == 0)
     panic("kvmpa");
   if((*pte & PTE_V) == 0)
@@ -151,14 +151,14 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
   uint64 a, last;
   pte_t *pte;
 
-  a = PGROUNDDOWN(va);
-  last = PGROUNDDOWN(va + size - 1);
+  a = PGROUNDDOWN(va);  // pgrounddown，取出虚拟地址的索引index
+  last = PGROUNDDOWN(va + size - 1);  // 这一段内存的结束页
   for(;;){
-    if((pte = walk(pagetable, a, 1)) == 0)
+    if((pte = walk(pagetable, a, 1)) == 0)  // 页表项为空，且无法分配
       return -1;
-    if(*pte & PTE_V)
+    if(*pte & PTE_V)  // 页表无效
       panic("remap");
-    *pte = PA2PTE(pa) | perm | PTE_V;
+    *pte = PA2PTE(pa) | perm | PTE_V;  // 往页表项里面填入内容
     if(a == last)
       break;
     a += PGSIZE;
@@ -234,7 +234,7 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
   if(newsz < oldsz)
     return oldsz;
 
-  oldsz = PGROUNDUP(oldsz);
+  oldsz = PGROUNDUP(oldsz);  // 一共多少页
   for(a = oldsz; a < newsz; a += PGSIZE){
     mem = kalloc();
     if(mem == 0){
@@ -276,8 +276,8 @@ freewalk(pagetable_t pagetable)
 {
   // there are 2^9 = 512 PTEs in a page table.
   for(int i = 0; i < 512; i++){
-    pte_t pte = pagetable[i];
-    if((pte & PTE_V) && (pte & (PTE_R|PTE_W|PTE_X)) == 0){
+    pte_t pte = pagetable[i]; // 取得一个pte
+    if((pte & PTE_V) && (pte & (PTE_R|PTE_W|PTE_X)) == 0){  // 不有效，或者一个r，w，x权限都没有，那就是指向下一级页表
       // this PTE points to a lower-level page table.
       uint64 child = PTE2PA(pte);
       freewalk((pagetable_t)child);
@@ -439,4 +439,33 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
   } else {
     return -1;
   }
+}
+
+void vmprint_dfs(pagetable_t pagetable, int depth)
+{
+  static char* prefix[] = {  // 一个函数才有一个
+    "", 
+    "..",
+    ".. ..",
+    ".. .. .."
+  };
+
+  for (int i = 0; i < 512; i ++ ) {  // 每一个页表就是512个页表项
+    pte_t pte = pagetable[i]; // 取得一个pte，它是54位的
+    if (pte & PTE_V) {  // 有效才打印和递归下去
+      printf("%s%d: pte %p pa %p\n", prefix[depth], i, pte, PTE2PA(pte));
+      if((pte & (PTE_R|PTE_W|PTE_X)) == 0){  // 不有效，或者一个r，w，x权限都没有，那就是指向下一级页表
+        // this PTE points to a lower-level page table.
+        uint64 child = PTE2PA(pte);
+        vmprint_dfs((pagetable_t)child, depth + 1);
+      } 
+    }
+  }
+}
+
+// 因为页表本身就是树的结构，所以适合用递归来遍历
+void vmprint(pagetable_t pagetable)  
+{
+  printf("page table %p\n", pagetable);
+  vmprint_dfs(pagetable, 1);
 }
