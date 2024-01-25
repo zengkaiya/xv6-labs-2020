@@ -67,7 +67,7 @@ exec(char *path, char **argv)
   // Allocate two pages at the next page boundary.
   // Use the second as the user stack.
   sz = PGROUNDUP(sz);
-  uint64 sz1;
+  uint64 sz1;  // 拿一个变量存下新的地址，看看有没有越界
   if((sz1 = uvmalloc(pagetable, sz, sz + 2*PGSIZE)) == 0)
     goto bad;
   if (sz1 >= PLIC) {
@@ -111,6 +111,7 @@ exec(char *path, char **argv)
       last = s+1;
   safestrcpy(p->name, last, sizeof(p->name));
 
+  // 把原来的内核页表释放掉，并把现在新的页表的内容赋值进去
   uvmunmap(p->kpagetable, 0, PGROUNDUP(oldsz)/PGSIZE, 0);
   kvmcopymappings(pagetable, p->kpagetable, 0, sz);
     

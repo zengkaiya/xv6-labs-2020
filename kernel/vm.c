@@ -20,14 +20,14 @@ int copyinstr_new(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max);
 
 void kvm_map_pagetable(pagetable_t pgtbl) {
   // 将各种内核需要的 direct mapping 添加到页表 pgtbl 中。
-  
+
   // uart registers
   kvmmap(pgtbl, UART0, UART0, PGSIZE, PTE_R | PTE_W);
 
   // virtio mmio disk interface
   kvmmap(pgtbl, VIRTIO0, VIRTIO0, PGSIZE, PTE_R | PTE_W);
 
-  // CLINT 这个不要用到
+  // CLINT 这个只用唯一那个内核页表要用到，单独放到它里面去映射
   // kvmmap(pgtbl, CLINT, CLINT, 0x10000, PTE_R | PTE_W);
 
   // PLIC
@@ -45,11 +45,11 @@ void kvm_map_pagetable(pagetable_t pgtbl) {
 }
 
 pagetable_t
-kvminit_newpgtbl()
+kvminit_newpgtbl()  // 把这个抽象出来是真的牛逼
 {
+  // 在这个函数里都要用传递的pgtbl
   pagetable_t pgtbl = (pagetable_t) kalloc();
   memset(pgtbl, 0, PGSIZE);
-
   kvm_map_pagetable(pgtbl);
 
   return pgtbl;
@@ -87,7 +87,7 @@ kvminithart()
 //   12..20 -- 9 bits of level-0 index.
 //    0..11 -- 12 bits of byte offset within the page.
 pte_t *
-walk(pagetable_t pagetable, uint64 va, int alloc) // pagetable就是一个数组
+walk(pagetable_t pagetable, uint64 va, int alloc) // 用软件的方式访问一个pgtbl，得到一个pte的地址
 {
   if(va >= MAXVA)
     panic("walk");
@@ -438,6 +438,7 @@ void vmprint(pagetable_t pagetable)
   vmprint_dfs(pagetable, 1);
 }
 
+// 递归释放一个内核页表中的所有 mapping，但是不释放其指向的物理页
 void
 kvm_free_kernelpgtbl(pagetable_t pagetable)
 {
@@ -448,16 +449,21 @@ kvm_free_kernelpgtbl(pagetable_t pagetable)
     if((pte & PTE_V) && (pte & (PTE_R|PTE_W|PTE_X)) == 0){ // 如果该页表项指向更低一级的页表
       // 递归释放低一级页表及其页表项
       kvm_free_kernelpgtbl((pagetable_t)child);
-      pagetable[i] = 0;
+      pagetable[i] = 0;  // 这个其实每多大用处
     }
   }
-  kfree((void*)pagetable); // 释放当前级别页表所占用空间
+  kfree((void*)pagetable); // 这个是关键，释放所有一、二、三级页表，但不释放物理内存
 }
 
+
+// 将 src 页表的一部分页映射关系拷贝到 dst 页表中。
+// 只拷贝页表项，不拷贝实际的物理页内存。
+// 成功返回0，失败返回 -1
 int kvmcopymappings(pagetable_t src, pagetable_t dst, uint64 start, uint64 sz)
 {
   pte_t *pte;
   uint64 pa, i;
+  // PGROUNDUP：对齐页边界，防止 remap
   for (i = PGROUNDUP(start); i < start + sz; i += PGSIZE) {
     if ((pte = walk(src, i, 0)) == 0) {
       panic("kvmcopymappings: pte should exist");
@@ -465,9 +471,11 @@ int kvmcopymappings(pagetable_t src, pagetable_t dst, uint64 start, uint64 sz)
     if ((*pte & PTE_V) == 0) {
       panic("kvmcopymappings: page not present");
     }
+    // 前面取出pte就是为了这两步
     pa = PTE2PA(*pte);
+    // 必须设置该权限，RISC-V 中内核是无法直接访问用户页的。
     uint flags = PTE_FLAGS(*pte) & ~PTE_U;
-    if(mappages(dst, i, PGSIZE, pa, flags) != 0){
+    if(mappages(dst, i, PGSIZE, pa, flags) != 0){  // 增加新的映射
       goto err;
     }
   }

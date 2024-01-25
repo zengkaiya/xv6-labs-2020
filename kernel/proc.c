@@ -112,9 +112,10 @@ found:
     return 0;
   }
 
-  p->kpagetable = kvminit_newpgtbl();
+  p->kpagetable = kvminit_newpgtbl();  // 得到一个普通的内核页表
 
   // 分配一个物理页，作为新进程的内核栈使用
+  // 这里原本是在procinit里面做的，但是因为我们要把内核页表也加上kstack的映射，所以放在这个地方了
   char *pa = kalloc();
   if(pa == 0)
     panic("kalloc");
@@ -161,8 +162,9 @@ freeproc(struct proc *p)
   // 注意：此处不能使用 proc_freepagetable，因为其不仅会释放页表本身，还会把页表内所有的叶节点对应的物理页也释放掉。
   // 这会导致内核运行所需要的关键物理页被释放，从而导致内核崩溃。
   // 这里使用 kfree(p->kernelpgtbl) 也是不足够的，因为这只释放了**一级页表本身**，而不释放二级以及三级页表所占用的空间。
-  
-  // 递归释放进程独享的页表，释放页表本身所占用的空间，但**不释放页表指向的物理页**
+  // 所以需要自己写一个定制的释放页表的函数  
+
+  // 递归释放进程独享的页表，释放页表本身所占用的空间，但不释放页表指向的物理页
   kvm_free_kernelpgtbl(p->kpagetable);
   p->kpagetable = 0;
   p->state = UNUSED;
@@ -253,7 +255,7 @@ userinit(void)
 // Grow or shrink user memory by n bytes.
 // Return 0 on success, -1 on failure.
 int
-growproc(int n)
+growproc(int n)  // 这个函数就是sbrk
 {
   uint sz;
   struct proc *p = myproc();
@@ -264,6 +266,7 @@ growproc(int n)
     if((newsz = uvmalloc(p->pagetable, sz, sz + n)) == 0) {
       return -1;
     }
+    // 内核页表中的映射同步扩大
     if (kvmcopymappings(p->pagetable, p->kpagetable, sz, n) != 0) {
       uvmdealloc(p->pagetable, newsz, sz);
       return -1;
@@ -271,6 +274,7 @@ growproc(int n)
     sz = newsz;
   } else if(n < 0){
     uvmdealloc(p->pagetable, sz, sz + n);
+    // 内核页表中的映射同步缩小
     sz = kvmdealloc(p->kpagetable, sz, sz + n);
   }
   p->sz = sz;
@@ -293,7 +297,7 @@ fork(void)
 
   // Copy user memory from parent to child.
   if(uvmcopy(p->pagetable, np->pagetable, p->sz) < 0 ||
-  kvmcopymappings(np->pagetable, np->kpagetable, 0, p->sz) < 0){
+  kvmcopymappings(np->pagetable, np->kpagetable, 0, p->sz) < 0){  // 把页表在内核页表中拷贝一份
     freeproc(np);
     release(&np->lock);
     return -1;
@@ -499,11 +503,14 @@ scheduler(void)
         p->state = RUNNING;
         c->proc = p;
 
+        // 切换为内核页表，在进程切换的时候一直是出于内核态，所以传进去的就是内核页表，不是进程页表
+        // 进程页表是待会系统调用结束后自己会切换的
         w_satp(MAKE_SATP(p->kpagetable));
         sfence_vma();
 
         swtch(&c->context, &p->context);
 
+        // 没有用户进程时，还是得用唯一的内核页表
         kvminithart();
 
         // Process is done running for now.
