@@ -323,10 +323,10 @@ sfence_vma()
 #define PGSIZE 4096 // bytes per page
 #define PGSHIFT 12  // bits of offset within a page
 
-// 页数上取整
+// 页数上取整，即如果是第一页中的内容，就会得到第二页的基地址
 #define PGROUNDUP(sz)  (((sz)+PGSIZE-1) & ~(PGSIZE-1))
 
-// 页数下取整
+// 页数下取整，即第几页就是第几页的基地址
 #define PGROUNDDOWN(a) (((a)) & ~(PGSIZE-1))
 
 #define PTE_V (1L << 0) // valid

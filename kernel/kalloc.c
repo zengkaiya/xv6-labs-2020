@@ -11,7 +11,7 @@
 
 void freerange(void *pa_start, void *pa_end);
 
-extern char end[]; // first address after kernel.
+extern char end[]; // first address after kernel.就是kernelbase
                    // defined by kernel.ld.
 
 struct run {

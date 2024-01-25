@@ -411,7 +411,7 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
 
 void vmprint_dfs(pagetable_t pagetable, int depth)
 {
-  static char* prefix[] = {  // 一个函数才有一个
+  static char* prefix[] = {  // static使得一个函数才有一个
     "", 
     "..",
     ".. ..",
@@ -419,7 +419,7 @@ void vmprint_dfs(pagetable_t pagetable, int depth)
   };
 
   for (int i = 0; i < 512; i ++ ) {  // 每一个页表就是512个页表项
-    pte_t pte = pagetable[i]; // 取得一个pte，它是54位的
+    pte_t pte = pagetable[i]; // 取得一个pte，它是64位的
     if (pte & PTE_V) {  // 有效才打印和递归下去
       printf("%s%d: pte %p pa %p\n", prefix[depth], i, pte, PTE2PA(pte));
       if((pte & (PTE_R|PTE_W|PTE_X)) == 0){  // 不有效，或者一个r，w，x权限都没有，那就是指向下一级页表
