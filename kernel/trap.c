@@ -77,9 +77,16 @@ usertrap(void)
     exit(-1);
 
   // give up the CPU if this is a timer interrupt.
-  if(which_dev == 2)
+  if(which_dev == 2) {  // trap一共有三种状态，就是这个意思
+    p->alarm_last_ticks += 1;
+    if (p->alarm_interval != 0 && p->inalarm == 0 &&  p->alarm_last_ticks == p->alarm_interval) {
+      p->inalarm = 1;
+      *p->alarm_trapframe = *p->trapframe;  // 备份寄存器
+      p->trapframe->epc = (uint64)p->alarm_handler;
+    }
     yield();
-
+  }
+    
   usertrapret();
 }
 
