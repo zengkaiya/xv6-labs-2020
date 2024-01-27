@@ -12,7 +12,7 @@
 .globl trampoline
 trampoline:
 .align 4
-.globl uservec
+.globl uservec # 处理陷阱的程序
 uservec:    
 	#
         # trap.c sets stvec to point here, so
