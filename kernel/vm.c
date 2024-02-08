@@ -5,6 +5,8 @@
 #include "riscv.h"
 #include "defs.h"
 #include "fs.h"
+#include "spinlock.h"
+#include "proc.h"
 
 /*
  * the kernel's page table.
@@ -311,7 +313,7 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
   pte_t *pte;
   uint64 pa, i;
   uint flags;
-  char *mem;
+  // char *mem;
 
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walk(old, i, 0)) == 0)
@@ -319,14 +321,20 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
     if((*pte & PTE_V) == 0)
       panic("uvmcopy: page not present");
     pa = PTE2PA(*pte);
+    if (*pte & PTE_W) {  // 只有可写页才需要改变flags，只可读页不需要
+      // 清楚父进程的pte_w标志位，并设置这是cow页
+      *pte = (*pte & ~PTE_W) | PTE_COW;
+    }
+
     flags = PTE_FLAGS(*pte);
-    if((mem = kalloc()) == 0)
-      goto err;
-    memmove(mem, (char*)pa, PGSIZE);
-    if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){
-      kfree(mem);
+    // if((mem = kalloc()) == 0)
+    //   goto err;
+    // memmove(mem, (char*)pa, PGSIZE);
+    if(mappages(new, i, PGSIZE, (uint64)pa, flags) != 0){
+      // kfree(mem);
       goto err;
     }
+    krefpgae((void*)pa);
   }
   return 0;
 
@@ -351,12 +359,16 @@ uvmclear(pagetable_t pagetable, uint64 va)
 // Copy from kernel to user.
 // Copy len bytes from src to virtual address dstva in a given page table.
 // Return 0 on success, -1 on error.
+// 这个和copyin是软件访问页表，所以不会触发page fault
 int
 copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 {
   uint64 n, va0, pa0;
 
   while(len > 0){
+    if (uvmiscowpage(dstva)) {
+      uvmcowcopy(dstva);
+    }
     va0 = PGROUNDDOWN(dstva);
     pa0 = walkaddr(pagetable, va0);
     if(pa0 == 0)
@@ -439,4 +451,37 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
   } else {
     return -1;
   }
+}
+
+// 判断是否为cow页，利用当前页表的页表
+int uvmiscowpage(uint64 va)
+{
+  pte_t* pte;
+  struct proc *p = myproc();
+
+  return va < p->sz && ((pte = walk(p->pagetable, va, 0)) != 0) && (*pte & PTE_V) && (*pte & PTE_COW);
+}
+
+// 实复制一个懒复制页，并重新映射为可写
+int uvmcowcopy(uint64 va)
+{
+  pte_t *pte;
+  struct proc *p = myproc();
+
+  if ((pte = walk(p->pagetable, va, 0)) == 0)
+    panic("uvmcowcopy: walk");
+  
+  uint64 pa = PTE2PA(*pte);
+  
+  // 这个函数要实现的功能很多
+  uint64 new = (uint64)cow_copy((void*)pa);
+  if (new == 0)
+    return -1;
+
+  uint64 flags = (PTE_FLAGS(*pte) | PTE_W) & ~PTE_COW;
+  uvmunmap(p->pagetable, PGROUNDDOWN(va), 1, 0);
+  if (mappages(p->pagetable, va, 1, new, flags) == -1) {
+    panic("uvmcowcopy: mappages");
+  }
+  return 0;
 }
