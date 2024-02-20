@@ -10,30 +10,45 @@
 #define STACK_SIZE  8192
 #define MAX_THREAD  4
 
+struct context {
+  uint64 ra;
+  uint64 sp;
+
+  // callee-saved
+  uint64 s0;
+  uint64 s1;
+  uint64 s2;
+  uint64 s3;
+  uint64 s4;
+  uint64 s5;
+  uint64 s6;
+  uint64 s7;
+  uint64 s8;
+  uint64 s9;
+  uint64 s10;
+  uint64 s11;
+};
 
 struct thread {
   char       stack[STACK_SIZE]; /* the thread's stack */
   int        state;             /* FREE, RUNNING, RUNNABLE */
+  struct context ctx;
 
 };
 struct thread all_thread[MAX_THREAD];
 struct thread *current_thread;
-extern void thread_switch(uint64, uint64);
+extern void thread_switch(struct context *old,  struct context *new);  // 切换上下文比切换进程更合理一些
               
 void 
-thread_init(void)
+thread_init(void)  // 运行主线程
 {
-  // main() is thread 0, which will make the first invocation to
-  // thread_schedule().  it needs a stack so that the first thread_switch() can
-  // save thread 0's state.  thread_schedule() won't run the main thread ever
-  // again, because its state is set to RUNNING, and thread_schedule() selects
-  // a RUNNABLE thread.
+  // main() is thread 0, which will make the first invocation to thread_schedule(). it needs a stack so that the first thread_switch() can save thread 0's state. thread_schedule() won't run the main thread ever again, because its state is set to RUNNING, and thread_schedule() selects a RUNNABLE thread.
   current_thread = &all_thread[0];
   current_thread->state = RUNNING;
 }
 
 void 
-thread_schedule(void)
+thread_schedule(void)  // 进程切换
 {
   struct thread *t, *next_thread;
 
@@ -63,6 +78,10 @@ thread_schedule(void)
      * Invoke thread_switch to switch from t to next_thread:
      * thread_switch(??, ??);
      */
+
+    // 除了寄存器，还有栈？
+    // 就是切换上下文
+    thread_switch(&t->ctx, &next_thread->ctx);
   } else
     next_thread = 0;
 }
@@ -70,13 +89,16 @@ thread_schedule(void)
 void 
 thread_create(void (*func)())
 {
-  struct thread *t;
+  struct thread *t; // 开一个线程
 
   for (t = all_thread; t < all_thread + MAX_THREAD; t++) {
     if (t->state == FREE) break;
   }
   t->state = RUNNABLE;
   // YOUR CODE HERE
+  // 卧槽，太牛了，我们并不是直接切换执行线程函数，而是把该线程的上下文更新一下为func的信息，这样switch函数结束后，就可以ret到该func中去执行
+  t->ctx.ra = (uint64)func;
+  t->ctx.sp = (uint64)&t->stack + (STACK_SIZE - 1);
 }
 
 void 
