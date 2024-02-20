@@ -32,12 +32,12 @@ struct context {
 struct thread {
   char       stack[STACK_SIZE]; /* the thread's stack */
   int        state;             /* FREE, RUNNING, RUNNABLE */
-  struct context ctx;
+  struct context ctx;  // 绑定到每个线程上
 
 };
 struct thread all_thread[MAX_THREAD];
 struct thread *current_thread;
-extern void thread_switch(struct context *old,  struct context *new);  // 切换上下文比切换进程更合理一些
+extern void thread_switch(struct context *old,  struct context *new);  // 切换上下文比切换进程更合理一些，这是看我们的汇编代码怎么写来的
               
 void 
 thread_init(void)  // 运行主线程
@@ -70,7 +70,7 @@ thread_schedule(void)  // 进程切换
     exit(-1);
   }
 
-  if (current_thread != next_thread) {         /* switch threads?  */
+  if (current_thread != next_thread) {         
     next_thread->state = RUNNING;
     t = current_thread;
     current_thread = next_thread;
