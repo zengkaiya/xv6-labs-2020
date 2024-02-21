@@ -369,11 +369,9 @@ iunlockput(struct inode *ip)
 //
 // The content (data) associated with each inode is stored
 // in blocks on the disk. The first NDIRECT block numbers
-// are listed in ip->addrs[].  The next NINDIRECT blocks are
-// listed in block ip->addrs[NDIRECT].
+// are listed in ip->addrs[].  The next NINDIRECT blocks are listed in block ip->addrs[NDIRECT].
 
-// Return the disk block address of the nth block in inode ip.
-// If there is no such block, bmap allocates one.
+// Return the disk block address of the nth block in inode ip. If there is no such block, bmap allocates one.
 static uint
 bmap(struct inode *ip, uint bn)
 {
@@ -393,7 +391,33 @@ bmap(struct inode *ip, uint bn)
       ip->addrs[NDIRECT] = addr = balloc(ip->dev);
     bp = bread(ip->dev, addr);
     a = (uint*)bp->data;
-    if((addr = a[bn]) == 0){
+    if((addr = a[bn]) == 0){  // double index
+      a[bn] = addr = balloc(ip->dev);
+      log_write(bp);
+    }
+    brelse(bp);
+    return addr;
+  }
+
+  bn -= NINDIRECT;
+
+  // read double indirect index block
+  if (bn < NINDIRECT * NINDIRECT) {
+    // Load indirect block, allocating if necessary.
+    if((addr = ip->addrs[NDIRECT + 1]) == 0)  // first
+      ip->addrs[NDIRECT + 1] = addr = balloc(ip->dev);
+    bp = bread(ip->dev, addr);
+    a = (uint*)bp->data;
+    if((addr = a[bn / NINDIRECT]) == 0){  // second
+      a[bn / NINDIRECT] = addr = balloc(ip->dev);
+      log_write(bp);
+    }
+    brelse(bp);
+
+    bn %= NINDIRECT;
+    bp = bread(ip->dev, addr);
+    a = (uint*)bp->data;
+    if((addr = a[bn]) == 0){  // third
       a[bn] = addr = balloc(ip->dev);
       log_write(bp);
     }
@@ -430,6 +454,27 @@ itrunc(struct inode *ip)
     brelse(bp);
     bfree(ip->dev, ip->addrs[NDIRECT]);
     ip->addrs[NDIRECT] = 0;
+  }
+
+  if (ip->addrs[NDIRECT + 1]) {
+    bp = bread(ip->dev, ip->addrs[NDIRECT + 1]);  // first
+    a = (uint*)bp->data;
+    for(j = 0; j < NINDIRECT; j++){
+      if(a[j]) {  // second
+        struct buf *bp2 = bread(ip->dev, a[j]);
+        uint *a2 = (uint*)bp2->data;
+        for (int k = 0; k < NINDIRECT; k ++ ) {
+          if (a2[k]) {  // third
+            bfree(ip->dev, a2[k]);
+          }
+        }
+        brelse(bp2);
+        bfree(ip->dev, a[j]);
+      }
+    }
+    brelse(bp);
+    bfree(ip->dev, ip->addrs[NDIRECT + 1]);
+    ip->addrs[NDIRECT + 1] = 0;
   }
 
   ip->size = 0;
