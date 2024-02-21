@@ -69,7 +69,7 @@ kfree(void *pa)
 
   r = (struct run*)pa;
 
-  push_off();
+  push_off();  // 关中断
   int id = cpuid();
 
   acquire(&kmem[id].lock);
@@ -77,7 +77,7 @@ kfree(void *pa)
   kmem[id].freelist = r;
   release(&kmem[id].lock);
 
-  pop_off();
+  pop_off();  // 开中断
 }
 
 // Allocate one 4096-byte page of physical memory.
@@ -102,7 +102,8 @@ kalloc(void)
       acquire(&kmem[i].lock);  // 使用内存时一定要加锁
       struct run *rr = kmem[i].freelist;
       while (rr && steal) {
-        kmem[i].freelist = rr->next;
+        kmem[i].freelist = rr->next;  // 先往后走
+
         rr->next = kmem[id].freelist;
         kmem[id].freelist = rr;
 
