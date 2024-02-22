@@ -95,26 +95,60 @@ e1000_init(uint32 *xregs)
 int
 e1000_transmit(struct mbuf *m)
 {
-  //
-  // Your code here.
-  //
-  // the mbuf contains an ethernet frame; program it into
-  // the TX descriptor ring so that the e1000 sends it. Stash
-  // a pointer so that it can be freed after sending.
-  //
-  
+  acquire(&e1000_lock);
+
+  // 查询ring里下一个packet的下标
+  int idx = regs[E1000_TDT];
+
+  if ((tx_ring[idx].status & E1000_TXD_STAT_DD) == 0) {
+    // 之前的传输还没有完成
+    release(&e1000_lock);
+    return -1;
+  }
+
+  // 已传输完，可以释放上一个包中的内容了
+  if (tx_mbufs[idx])
+    mbuffree(tx_mbufs[idx]);
+
+  // 把这个新的网络包的pointer塞到ring这个下标位置
+  // 要改的东西就是要理解计算机网络里的东西了
+  tx_mbufs[idx] = m;
+  tx_ring[idx].length = m->len;
+  tx_ring[idx].addr = (uint64)m->head;
+  tx_ring[idx].cmd = E1000_TXD_CMD_RS | E1000_TXD_CMD_EOP;
+  regs[E1000_TDT] = (idx + 1) % TX_RING_SIZE;
+
+  release(&e1000_lock);
   return 0;
+  // the mbuf contains an ethernet frame; program it into
+  // the TX descriptor ring so that the e1000 sends it. Stash a pointer so that it can be freed after sending.
 }
 
 static void
 e1000_recv(void)
 {
-  //
-  // Your code here.
-  //
+  // 遍历这个ring, 把所有新到来的packet交由网络上层的协议/应用去处理.
+  while (1) {
+    // 把所有到达的packet向上层递交
+    int idx = (regs[E1000_RDT] + 1) % RX_RING_SIZE;
+    if ((rx_ring[idx].status & E1000_RXD_STAT_DD) == 0) {
+      // 没有新包了
+      return;
+    }
+
+    rx_mbufs[idx]->len = rx_ring[idx].length;
+    // 向上层network stack传输
+    net_rx(rx_mbufs[idx]);
+
+    // 把这个下标清空 放置一个空包
+    rx_mbufs[idx] = mbufalloc(0);
+    rx_ring[idx].status = 0;
+    rx_ring[idx].addr = (uint64)rx_mbufs[idx]->head;
+    regs[E1000_RDT] = idx;
+  }
+
   // Check for packets that have arrived from the e1000
   // Create and deliver an mbuf for each packet (using net_rx()).
-  //
 }
 
 void
