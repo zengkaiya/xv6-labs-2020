@@ -1,0 +1,12 @@
+{
+    "files.associations": {
+        "*.html": "html",
+        "proc.h": "c",
+        "fcntl.h": "c",
+        "fs.h": "c",
+        "file.h": "c",
+        "param.h": "c",
+        "elf.h": "c",
+        "defs.h": "c"
+    }
+}

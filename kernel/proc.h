@@ -1,3 +1,15 @@
+#define NVMA 16 // 16个槽
+
+struct vma {
+  int valid;  // 是否有效
+  uint64 vastart;  // 开始地址
+  uint64 sz; // 大小
+  struct file *f; // 所映射文件
+  int prot;
+  int flags;  // 权限
+  uint64 offset;  // 文件内偏移量
+};
+
 // Saved registers for kernel context switches.
 struct context {
   uint64 ra;
@@ -103,4 +115,5 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+  struct vma vmas[NVMA];       // Virtual memory area array
 };
